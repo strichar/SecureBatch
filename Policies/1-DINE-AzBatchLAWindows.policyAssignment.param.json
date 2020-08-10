@@ -1,0 +1,47 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "DINE-AzBatchLAWindows"
+        },
+        "policyDefinitionId": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon/providers/Microsoft.Authorization/policyDefinitions/DINE-AzBatchLAWindows"
+        },
+        "policyLocation": {
+            "value": "eastus"
+        },
+        "policyScope": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon"
+        },
+        "policyNotScopes": {
+            "value": []
+        },
+        "policyParameters": {
+            "value": {
+                "logAnalytics": {
+                    "value": "/subscriptions/71363c9e-d080-4b1d-8594-f60644a00e4a/resourcegroups/monitoring/providers/microsoft.operationalinsights/workspaces/hpcgbbemeahackathon-la"
+                },
+                "allowedimagePublisher": {
+                    "value": [
+                        "microsoftwindowsserver"
+                    ]
+                },
+                "allowedimageOffer": {
+                    "value": [
+                        "windowsserver"
+                    ]
+                },
+                "allowedimageSKU": {
+                    "value": [
+                        "2016-datacenter",
+                        "2019-datacenter"
+                    ]
+                },
+                "scalesetNameMatch": {
+                    "value": "AzureBatch-VMSS-D"
+                }
+            }
+        }
+    }
+}

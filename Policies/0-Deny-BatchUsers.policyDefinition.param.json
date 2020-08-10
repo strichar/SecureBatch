@@ -1,0 +1,35 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "Deny-BatchUsers"
+        },
+        "policyRule": {
+            "value": {
+                "if": {
+                    "anyOf": [
+                        {
+                            "allOf": [
+                                {
+                                    "field": "type",
+                                    "equals": "Microsoft.Batch/batchAccounts/pools"
+                                },
+                                {
+                                    "field": "Microsoft.Batch/batchAccounts/pools/userAccounts",
+                                    "exists": true
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "then": {
+                    "effect": "deny"
+                }
+            }
+        },
+        "policyParameters": {
+            "value": {}
+        }
+    }
+}

@@ -1,0 +1,527 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "azureBatchAccountName": {
+            "type": "string"
+        },
+        "azureBatchLocation": {
+            "type": "string"
+        },
+        "azureBatchPublicIPResourceGroupName": {
+            "type": "string"
+        },
+        "azureBatchResourceGroupName": {
+            "type": "string"
+        },
+        "azureBatchHubFirewallIP": {
+            "type": "string"
+        },
+        "azureBatchExternalPublicIPs": {
+            "type": "array"
+
+        },
+        "azureBatchSubnetResourceID": {
+            "type": "string"
+        },
+        "azureBatchPoolsObject": {
+            "type": "object"
+        },
+        "initialDeployment": {
+            "type": "bool"
+        }
+
+    },
+    "variables": {
+        "storageAccountName": "[concat(parameters('azureBatchAccountName'),'sa' )]",
+        "keyVaultName": "[concat(parameters('azureBatchAccountName'),'kv' )]",
+        "azureBatchBuiltInServicePrincipalID": "f520d84c-3fd3-4cc8-88d4-2ed25b00d27a"
+    },
+    "resources": [
+
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2018-09-01-preview",
+            "comments": "This authorizes the Azure Batch Service PRincipal on the subscription",
+            "name": "[guid('AzureBatchRoleAssignment')]",
+            "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+                "principalId": "[variables('azureBatchBuiltInServicePrincipalID')]"
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('publicIPDeployment',parameters('azureBatchPoolsObject').pools[copyindex()].name)]",
+
+            "dependsOn": [
+            ],
+            "copy": {
+                "count": "[length(parameters('azureBatchPoolsObject').pools)]",
+                "name": "publicIPCount"
+            },
+            "resourceGroup": "[parameters('azureBatchPublicIPResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "parameters": {
+                    "publicIpName": {
+                        "value": "[tolower(concat(parameters('azureBatchAccountName'),parameters('azureBatchPoolsObject').pools[copyindex()].name))]"
+                    },
+                    "publicIpCount": {
+                        "value": "[add(div(add(parameters('azureBatchPoolsObject').pools[copyindex()].targetDedicatedNodes ,  parameters('azureBatchPoolsObject').pools[copyindex()].targetLowPriorityNodes),50),1)]"
+                    },
+                    "location": {
+                        "value": "[parameters('azureBatchLocation')]"
+                    }
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "publicIpName": {
+                            "type": "string"
+                        },
+                        "publicIpCount": {
+                            "type": "int"
+                        },
+                        "location": {
+                            "type": "string"
+                        }
+
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('publicIpName'),copyindex())]",
+                            "type": "Microsoft.Network/publicIPAddresses",
+
+                            "comments": "This deployment creates the public ip addresses in the specified resourcegroup, the outer loop is for each pool, the inner loop is for the required number of IP per pool",
+                            "copy": {
+                                "name": "publicIPCopy",
+                                "count": "[parameters('publicIpCount')]"
+                            },
+                            "apiVersion": "2019-11-01",
+                            "location": "[parameters('Location')]",
+                            "tags": {
+                            },
+                            "sku": {
+                                "name": "Standard"
+                            },
+                            "properties": {
+                                "publicIPAllocationMethod": "Static",
+                                "dnsSettings": {
+                                    "domainNameLabel": "[concat(parameters('publicIpName'),copyindex())]"
+                                }
+                            }
+
+
+                        }
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "storageKeyVaultBatchDeployment",
+            "dependsOn": [
+                "[guid('AzureBatchRoleAssignment')]",
+                "publicIPCount"
+            ],
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('azureBatchAccountName'),'-routetable')]",
+                            "type": "Microsoft.Network/routeTables",
+                            "comments": "This deployment creates a route table with the next hop of internet for all the batch  IP addresses ",
+                            "apiVersion": "2019-11-01",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "tags": {
+                            },
+                            "properties": {
+                                "copy": [
+                                    {
+                                        "name": "routes",
+                                        "count": "[length(parameters('azureBatchExternalPublicIPs'))]",
+                                        "input": {
+                                            "name": "[concat('azurebatchroute',copyindex('routes'))]",
+                                            "properties": {
+                                                "addressPrefix": "[parameters('azureBatchExternalPublicIPs')[copyIndex('routes')]]",
+                                                "nextHopType": "internet"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('azureBatchAccountName'),'-routetable/default')]",
+                            "dependson": [
+                                "[concat(parameters('azureBatchAccountName'),'-routetable')]"
+                            ],
+                            "type": "Microsoft.Network/routeTables/routes",
+                            "comments": "this creates the final route which sends traffic to an azure firewall",
+                            "apiVersion": "2019-11-01",
+                            "properties": {
+                                "addressPrefix": "0.0.0.0/0",
+                                "nextHopType": "virtualappliance",
+                                "nextHopIpAddress": "[parameters('azureBatchHubFirewallIP')]"
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2017-10-01",
+                            "name": "[variables('storageAccountName')]",
+                            "comments": "This creates the storage account with the firewall turned on, but permits the addresses in the parameter azureBatchExternalPublicIPs ",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "sku": {
+                                "name": "Standard_LRS"
+                            },
+                            "kind": "StorageV2",
+                            "properties": {
+                                "networkAcls": {
+                                    "bypass": "Logging, Metrics, AzureServices",
+                                    "virtualNetworkRules": [
+                                        {
+                                            "id": "[parameters('azureBatchSubnetResourceID')]",
+                                            "action": "Allow"
+
+                                        }
+                                    ],
+                                    "copy": [
+                                        {
+                                            "name": "ipRules",
+                                            "count": "[length(parameters('azureBatchExternalPublicIPs'))]",
+                                            "input": {
+                                                "value": "[if(    equals(last(split(parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')],'/')),'32')   ,   split(parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')],'/')[0],  parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')])]",
+                                                "action": "Allow"
+
+                                            }
+                                        }
+                                    ],
+                                    "defaultAction": "deny"
+                                }
+                            }
+                        },
+
+                        {
+                            "name": "[variables('keyVaultName')]",
+                            "type": "Microsoft.KeyVault/vaults",
+                            "comments": "This creates the keyvault with the firewall turned on, but permits the addresses in the parameter azureBatchExternalPublicIPs. Also adds the accesspolicies for the service principal ",
+                            "apiVersion": "2019-09-01",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "tags": {
+                            },
+                            "properties": {
+                                "tenantId": "[subscription().tenantId]",
+                                "sku": {
+                                    "family": "A",
+                                    "name": "standard"
+                                },
+                                "accessPolicies": [
+
+                                    {
+                                        "tenantId": "[subscription().tenantId]",
+                                        "objectid": "[variables('azureBatchBuiltInServicePrincipalID')]",
+                                        "metadata": {
+                                            "value": "Azure Batch Service Principal"
+                                        },
+                                        "permissions": {
+                                            "keys": [
+                                            ],
+                                            "secrets": [
+                                                "get",
+                                                "list",
+                                                "set",
+                                                "delete",
+                                                "backup",
+                                                "restore",
+                                                "recover",
+                                                "purge"
+                                            ],
+                                            "certificates": [
+                                            ],
+                                            "storage": [
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "tenantId": "[subscription().tenantId]",
+                                        "objectid": "9b535f2c-942b-4d31-aada-0666128fb3dd",
+                                        "metadata": {
+                                            "value": "strichar@microsoft.com"
+                                        },
+                                        "permissions": {
+                                            "keys": [
+                                            ],
+                                            "secrets": [
+                                                "get",
+                                                "list",
+                                                "set",
+                                                "delete",
+                                                "backup",
+                                                "restore",
+                                                "recover",
+                                                "purge"
+                                            ],
+                                            "certificates": [
+                                            ],
+                                            "storage": [
+                                            ]
+                                        }
+                                    }
+                                ],
+
+                                "enabledForDeployment": true,
+                                "enabledForDiskEncryption": true,
+                                "enabledForTemplateDeployment": true,
+                                "enableSoftDelete": false,
+                                "enableRbacAuthorization": false,
+                                "networkAcls": {
+                                    "bypass": "AzureServices",
+                                    "defaultAction": "Deny",
+                                    "copy": [
+                                        {
+                                            "name": "ipRules",
+                                            "count": "[length(parameters('azureBatchExternalPublicIPs'))]",
+                                            "input": {
+                                                "value": "[if(    equals(last(split(parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')],'/')),'32')   ,   split(parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')],'/')[0],  parameters('azureBatchExternalPublicIPs')[copyIndex('ipRules')])]"
+
+                                            }
+                                        }
+                                    ],
+
+
+                                    "virtualNetworkRules": [
+                                        {
+                                            "id": "[parameters('azureBatchSubnetResourceID')]"
+                                        }
+                                    ]
+                                }
+                            },
+                            "resources": [
+                            ]
+                        },
+
+                        {
+                            "name": "[parameters('azureBatchAccountName')]",
+                            "type": "Microsoft.Batch/batchAccounts",
+                            "dependson": [
+                                "[variables('keyVaultName')]",
+                                "[variables('storageAccountName')]"
+
+                            ],
+                            "apiVersion": "2019-04-01",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "tags": {
+                            },
+                            "properties": {
+                                "autoStorage": {
+                                    "storageAccountId": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Storage/storageAccounts/',variables('storageAccountName'))]"
+
+                                },
+                                "poolAllocationMode": "UserSubscription",
+                                "keyVaultReference": {
+                                    "id": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.KeyVault/vaults/',variables('keyVaultName'))]",
+                                    "url": "[concat('https://',variables('keyVaultName'),'.vault.azure.net/')]"
+                                }
+                            },
+                            "resources": [
+                            ]
+                        }
+
+
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('batchPoolDeployment',copyindex())]",
+            "condition": "[equals(parameters('initialDeployment'),bool('false'))]",
+            "dependsOn": [
+                "publicIPCount",
+                "storageKeyVaultBatchDeployment"
+            ],
+            "copy": {
+                "count": "[length(parameters('azureBatchPoolsObject').pools)]",
+                "name": "batchPoolDeployment"
+            },
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('azureBatchAccountName'),'/', parameters('azureBatchPoolsObject').pools[copyindex()].name)]",
+                            "type": "Microsoft.Batch/batchAccounts/pools",
+                            "comments": "Adds the batch account pool based on the parameter object azureBatchPoolsObject",
+                            "apiVersion": "2020-03-01",
+                            "properties": {
+                                "networkConfiguration": {
+                                    "subnetId": "[parameters('azureBatchSubnetResourceID')]",
+
+                                    "endpointConfiguration": {
+                                        "inboundNatPools": [
+                                            {
+                                                "name": "SSH",
+                                                "protocol": "TCP",
+                                                "backendPort": "22",
+                                                "frontendPortRangeStart": "4000",
+                                                "frontendPortRangeEnd": "4100",
+                                                "networkSecurityGroupRules": [
+                                                    {
+                                                        "priority": "170",
+                                                        "access": "deny",
+                                                        "sourceAddressPrefix": "Internet"
+                                                    }
+                                                ]
+                                            }
+
+                                        ]
+                                    },
+                                    "publicIPAddressConfiguration": {
+                                        "copy": [
+                                            {
+                                                "name": "ipAddressIds",
+                                                "count": "[add(div(add(parameters('azureBatchPoolsObject').pools[copyindex()].targetDedicatedNodes ,  parameters('azureBatchPoolsObject').pools[copyindex()].targetLowPriorityNodes),50),1)]",
+                                                "input": "[concat(subscription().id,'/resourceGroups/',parameters('azureBatchPublicIPResourceGroupName'),'/providers/Microsoft.Network/publicIPAddresses/',    tolower(concat(parameters('azureBatchAccountName'),parameters('azureBatchPoolsObject').pools[copyindex()].name,  copyindex('ipAddressIds'))  )  )]"
+                                            }
+                                        ]
+                                    }
+
+                                },
+                                "deploymentConfiguration": "[parameters('azureBatchPoolsObject').pools[copyindex()].deploymentConfiguration]",
+                                "vmSize": "[parameters('azureBatchPoolsObject').pools[copyindex()].vmSize]",
+                                "scaleSettings": {
+                                    "fixedScale": {
+                                        "resizeTimeout": "PT10M",
+                                        "targetDedicatedNodes": "[parameters('azureBatchPoolsObject').pools[copyindex()].targetDedicatedNodes]",
+                                        "targetLowPriorityNodes": "[parameters('azureBatchPoolsObject').pools[copyindex()].targetLowPriorityNodes]"
+
+                                    }
+                                }
+                            }
+                        }
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('batchPoolDeploymentNew',copyindex())]",
+            "condition": "[equals(parameters('initialDeployment'),bool('true'))]",
+            "dependsOn": [
+                "publicIPCount",
+                "storageKeyVaultBatchDeployment"
+            ],
+            "copy": {
+                "count": "[length(parameters('azureBatchPoolsObject').pools)]",
+                "name": "batchPoolDeployment"
+            },
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('azureBatchAccountName'),'/', parameters('azureBatchPoolsObject').pools[copyindex()].name)]",
+                            "type": "Microsoft.Batch/batchAccounts/pools",
+                            "comments": "Adds the batch account pool based on the parameter object azureBatchPoolsObject",
+                            "apiVersion": "2019-08-01",
+                            "properties": {
+                                "networkConfiguration": {
+                                    "subnetId": "[parameters('azureBatchSubnetResourceID')]",
+
+                                    "endpointConfiguration": {
+                                        "inboundNatPools": [
+                                            {
+                                                "name": "SSH",
+                                                "protocol": "TCP",
+                                                "backendPort": "22",
+                                                "frontendPortRangeStart": "4000",
+                                                "frontendPortRangeEnd": "4100",
+                                                "networkSecurityGroupRules": [
+                                                    {
+                                                        "priority": "170",
+                                                        "access": "deny",
+                                                        "sourceAddressPrefix": "Internet"
+                                                    }
+                                                ]
+                                            }
+
+                                        ]
+                                    },
+                                    "copy": [
+                                        {
+                                            "name": "publicIPs",
+                                            "count": "[add(div(add(parameters('azureBatchPoolsObject').pools[copyindex()].targetDedicatedNodes ,  parameters('azureBatchPoolsObject').pools[copyindex()].targetLowPriorityNodes),50),1)]",
+                                            "input": "[concat(subscription().id,'/resourceGroups/',parameters('azureBatchPublicIPResourceGroupName'),'/providers/Microsoft.Network/publicIPAddresses/',    tolower(concat(parameters('azureBatchAccountName'),parameters('azureBatchPoolsObject').pools[copyindex()].name,  copyindex('publicIPs'))  )  )]"
+                                        }
+                                    ]
+
+
+                                },
+                                "deploymentConfiguration": "[parameters('azureBatchPoolsObject').pools[copyindex()].deploymentConfiguration]",
+                                "vmSize": "[parameters('azureBatchPoolsObject').pools[copyindex()].vmSize]",
+                                "scaleSettings": {
+                                    "fixedScale": {
+                                        "resizeTimeout": "PT10M",
+                                        "targetDedicatedNodes": "[parameters('azureBatchPoolsObject').pools[copyindex()].targetDedicatedNodes]",
+                                        "targetLowPriorityNodes": "[parameters('azureBatchPoolsObject').pools[copyindex()].targetLowPriorityNodes]"
+
+                                    }
+                                }
+                            }
+                        }
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

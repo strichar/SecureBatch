@@ -1,0 +1,124 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "Deny-BatchPoolSku"
+        },
+        "policyParameters": {
+            "value": {
+                "allowedimagePublisher": {
+                    "type": "array",
+                    "metadata": {
+                        "description": "The allowed images",
+                        "displayName": "The allowed images"
+                    }
+                },
+                "allowedimageOffer": {
+                    "type": "array",
+                    "metadata": {
+                        "description": "The allowed images",
+                        "displayName": "The allowed images"
+                    }
+                },
+                "allowedimageSKU": {
+                    "type": "array",
+                    "metadata": {
+                        "description": "The allowed images",
+                        "displayName": "The allowed images"
+                    }
+                },
+                "scalesetNameMatch": {
+                    "type": "string"
+                }
+            }
+        },
+        "policyRule": {
+            "value": {
+                "if": {
+                    "anyOf": [
+                        {
+                            "allOf": [
+                                {
+                                    "field": "type",
+                                    "equals": "Microsoft.Batch/batchAccounts/pools"
+                                },
+                                {
+                                    "anyOf": [
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Batch/batchAccounts/pools/deploymentConfiguration.virtualMachineConfiguration.imageReference.publisher",
+                                                "in": "[parameters('allowedimagePublisher')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Batch/batchAccounts/pools/deploymentConfiguration.virtualMachineConfiguration.imageReference.offer",
+                                                "in": "[parameters('allowedimageOffer')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Batch/batchAccounts/pools/deploymentConfiguration.virtualMachineConfiguration.imageReference.sku",
+                                                "in": "[parameters('allowedimageSKU')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Batch/batchAccounts/pools/deploymentConfiguration.virtualMachineConfiguration.imageReference.version",
+                                                "equals": "latest"
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "allOf": [
+                                {
+                                    "field": "type",
+                                    "equals": "Microsoft.Compute/VirtualMachineScaleSets"
+                                },
+                                {
+                                    "field": "name",
+                                    "equals": "[parameters('scalesetNameMatch')]"
+                                },
+                                {
+                                    "anyOf": [
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Compute/imagePublisher",
+                                                "in": "[parameters('allowedimagePublisher')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Compute/imageOffer",
+                                                "in": "[parameters('allowedimageOffer')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Compute/imageSku",
+                                                "in": "[parameters('allowedimageSKU')]"
+                                            }
+                                        },
+                                        {
+                                            "not": {
+                                                "field": "Microsoft.Compute/imageVersion",
+                                                "equals": "latest"
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "then": {
+                    "effect": "deny"
+                }
+            }
+        }
+    }
+}

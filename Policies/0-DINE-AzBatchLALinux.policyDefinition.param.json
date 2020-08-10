@@ -1,0 +1,147 @@
+{
+      "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+            "policyName": {
+                  "value": "DINE-AzBatchLALinux"
+            },
+            "policyParameters": {
+                  "value": {
+                        "logAnalytics": {
+                              "type": "String",
+                              "metadata": {
+                                    "displayName": "Log Analyitcs workspace",
+                                    "description": "Select the Log Analytics workspace from dropdown list",
+                                    "strongType": "omsWorkspace"
+                              }
+                        },
+                        "allowedimagePublisher": {
+                              "type": "array",
+                              "metadata": {
+                                    "description": "The allowed images",
+                                    "displayName": "The allowed images"
+                              }
+                        },
+                        "allowedimageOffer": {
+                              "type": "array",
+                              "metadata": {
+                                    "description": "The allowed images",
+                                    "displayName": "The allowed images"
+                              }
+                        },
+                        "allowedimageSKU": {
+                              "type": "array",
+                              "metadata": {
+                                    "description": "The allowed images",
+                                    "displayName": "The allowed images"
+                              }
+                        },
+                        "scalesetNameMatch": {
+                              "type": "string"
+                        }
+                  }
+            },
+            "policyRule": {
+                  "value": {
+                        "if": {
+                              "allOf": [
+                                    {
+                                          "field": "type",
+                                          "equals": "Microsoft.Compute/virtualMachineScaleSets"
+                                    },
+                                    {
+                                          "field": "name",
+                                          "contains": "[parameters('scalesetNameMatch')]"
+                                    },
+                                    {
+                                          "field": "Microsoft.Compute/imagePublisher",
+                                          "in": "[parameters('allowedimagePublisher')]"
+                                    },
+                                    {
+                                          "field": "Microsoft.Compute/imageOffer",
+                                          "in": "[parameters('allowedimageOffer')]"
+                                    },
+                                    {
+                                          "field": "Microsoft.Compute/imageSKU",
+                                          "in": "[parameters('allowedimageSKU')]"
+                                    }
+                              ]
+                        },
+                        "then": {
+                              "effect": "deployIfNotExists",
+                              "details": {
+                                    "type": "Microsoft.Compute/virtualMachineScaleSets/extensions",
+                                    "existenceCondition": {
+                                          "allOf": [
+                                                {
+                                                      "field": "Microsoft.Compute/virtualMachineScaleSets/extensions/type",
+                                                      "equals": "OmsAgentForLinux"
+                                                },
+                                                {
+                                                      "field": "Microsoft.Compute/virtualMachineScaleSets/extensions/publisher",
+                                                      "equals": "Microsoft.EnterpriseCloud.Monitoring"
+                                                }
+                                          ]
+                                    },
+                                    "deployment": {
+                                          "properties": {
+                                                "mode": "incremental",
+                                                "template": {
+                                                      "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                                                      "contentVersion": "1.0.0.0",
+                                                      "parameters": {
+                                                            "resourceName": {
+                                                                  "type": "string"
+                                                            },
+                                                            "logAnalytics": {
+                                                                  "type": "string"
+                                                            },
+                                                            "location": {
+                                                                  "type": "string"
+                                                            }
+                                                      },
+                                                      "variables": {},
+                                                      "resources": [
+                                                            {
+                                                                  "name": "[concat(parameters('resourceName'),'/laPolicy')]",
+                                                                  "type": "Microsoft.Compute/virtualMachineScaleSets/extensions",
+                                                                  "location": "[parameters('location')]",
+                                                                  "apiVersion": "2017-03-30",
+                                                                  "properties": {
+                                                                        "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+                                                                        "type": "OmsAgentForLinux",
+                                                                        "typeHandlerVersion": "1.7",
+                                                                        "autoUpgradeMinorVersion": true,
+                                                                        "settings": {
+                                                                              "workspaceId": "[reference(parameters('logAnalytics'), '2015-11-01-preview').customerId]"
+                                                                        },
+                                                                        "protectedSettings": {
+                                                                              "workspaceKey": "[listKeys(parameters('logAnalytics'), '2015-11-01-preview').primarySharedKey]"
+                                                                        }
+                                                                  }
+                                                            }
+                                                      ],
+                                                      "outputs": {}
+                                                },
+                                                "parameters": {
+                                                      "logAnalytics": {
+                                                            "value": "[parameters('logAnalytics')]"
+                                                      },
+                                                      "location": {
+                                                            "value": "[field('location')]"
+                                                      },
+                                                      "resourceName": {
+                                                            "value": "[field('name')]"
+                                                      }
+                                                }
+                                          }
+                                    },
+                                    "roleDefinitionIds": [
+                                          "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                                    ]
+                              }
+                        }
+                  }
+            }
+      }
+}

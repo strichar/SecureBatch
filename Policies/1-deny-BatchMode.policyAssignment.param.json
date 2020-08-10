@@ -1,0 +1,26 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "Deny-BatchUsers"
+        },
+        "policyDefinitionId": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon/providers/Microsoft.Authorization/policyDefinitions/Deny-BatchUsers"
+        },
+        "policyLocation": {
+            "value": "eastus"
+        },
+        "policyScope": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon"
+        },
+        "policyNotScopes": {
+            "value": [
+               
+            ]
+        },
+        "policyParameters": {
+            "value": {}
+        }
+    }
+}

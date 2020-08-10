@@ -1,0 +1,37 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "Deny-BatchMode"
+        },
+        "policyRule": {
+            "value": {
+                "if": {
+                    "anyOf": [
+                        {
+                            "allOf": [
+                                {
+                                    "field": "type",
+                                    "equals": "Microsoft.Batch/batchAccounts"
+                                },
+                                {
+                                    "not": {
+                                        "field": "Microsoft.Batch/batchAccounts/poolAllocationMode",
+                                        "equals": "UserSubscription"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "then": {
+                    "effect": "deny"
+                }
+            }
+        },
+        "policyParameters": {
+            "value": {}
+        }
+    }
+}

@@ -1,0 +1,52 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "value": "Deny-BatchPoolSku"
+        },
+        "policyDefinitionId": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon/providers/Microsoft.Authorization/policyDefinitions/Deny-BatchPoolSku"
+        },
+        "policyLocation": {
+            "value": "eastus"
+        },
+        "policyScope": {
+            "value": "/providers/Microsoft.Management/managementGroups/hpc_gbb_hackathon"
+        },
+        "policyNotScopes": {
+            "value": []
+        },
+        "policyParameters": {
+            "value": {
+                "allowedimagePublisher": {
+                    "value": [
+                        "microsoft-azure-batch",
+                        "canonical",
+                        "microsoftwindowsserver"
+
+                    ]
+                },
+                "allowedimageOffer": {
+                    "value": [
+                        "ubuntu-server-container",
+                        "ubuntuserver",
+                        "windowsserver"
+
+                    ]
+                },
+                "allowedimageSKU": {
+                    "value": [
+                        "16-04-lts",
+                        "18.04-lts",
+                        "2016-datacenter",
+                        "2019-datacenter"
+                    ]
+                },
+                "scalesetNameMatch": {
+                    "value": "AzureBatch-VMSS-D"
+                }
+            }
+        }
+    }
+}

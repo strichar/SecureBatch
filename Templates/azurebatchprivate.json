@@ -1,0 +1,623 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "azureBatchAccountName": {
+            "type": "string"
+        },
+        "azureBatchLocation": {
+            "type": "string"
+        },
+        "azureBatchResourceGroupName": {
+            "type": "string"
+        },
+        "azureBatchSubnetResourceID": {
+            "type": "string"
+        },
+        "azureBatchPoolsObject": {
+            "type": "object"
+        },
+        "deployPrivateDNSZone": {
+            "type": "bool",
+            "defaultValue": true
+        }
+
+
+    },
+    "variables": {
+        "virtualNetworkName": "[split(parameters('azureBatchSubnetResourceID'),'/')[8]]",
+        "networkSecurityGroupName": "[concat('azurebatch-',parameters('azureBatchAccountName'),'-storage-pl')]",
+
+        "virtualNetworkSubnetName": "[split(parameters('azureBatchSubnetResourceID'),'/')[10]]",
+        "azureBatchBuiltInServicePrincipalID": "f520d84c-3fd3-4cc8-88d4-2ed25b00d27a"
+    },
+    "resources": [
+
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2018-09-01-preview",
+            "comments": "This authorizes the Azure Batch Service PRincipal on the subscription",
+            "name": "[guid(subscription().subscriptionId)]",
+            "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+                "principalId": "[variables('azureBatchBuiltInServicePrincipalID')]"
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "storageKeyVaultBatchDeployment",
+            "dependsOn": [
+                "[guid(subscription().subscriptionId)]"
+            ],
+
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "parameters": {
+                    "azureBatchAccountName": {
+                        "value": "[parameters('azureBatchAccountName')]"
+                    },
+                    "azureBatchLocation": {
+                        "value": "[parameters('azureBatchLocation')]"
+                    },
+                    "azureBatchResourceGroupName": {
+                        "value": "[parameters('azureBatchResourceGroupName')]"
+                    },
+
+                    "azureBatchSubnetResourceID": {
+                        "value": "[parameters('azureBatchSubnetResourceID')]"
+                    },
+                    "azureBatchBuiltInServicePrincipalID": {
+                        "value": "[variables('azureBatchBuiltInServicePrincipalID')]"
+                    }
+
+
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "azureBatchAccountName": {
+                            "type": "string"
+                        },
+                        "azureBatchLocation": {
+                            "type": "string"
+                        },
+                        "azureBatchResourceGroupName": {
+                            "type": "string"
+                        },
+
+                        "azureBatchSubnetResourceID": {
+                            "type": "string"
+                        },
+                        "azureBatchBuiltInServicePrincipalID": {
+                            "type": "string"
+
+                        }
+
+                    },
+                    "variables": {
+                        "storageAccountName": "[concat(parameters('azureBatchAccountName'),'sa' )]",
+                        "keyVaultName": "[concat(parameters('azureBatchAccountName'),'kv' )]",
+                        "privateLinkName": "[concat(parameters('azureBatchAccountName'),'-pl')]",
+                        "storagePrivateLinkName": "[concat(parameters('azureBatchAccountName'),'-storage-pl')]",
+                        "networkSecurityGroupName": "[concat('azurebatch-',parameters('azureBatchAccountName'),'-storage-pl')]",
+                        "privateDnsZoneName": "[concat('privatelink.',parameters('azureBatchLocation'),'.batch.azure.com')]"
+
+                    },
+                    "resources": [
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2017-10-01",
+                            "name": "[variables('storageAccountName')]",
+                            "comments": "This creates the storage account with the firewall turned on ",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "sku": {
+                                "name": "Standard_LRS"
+                            },
+                            "kind": "StorageV2",
+                            "properties": {
+                                "networkAcls": {
+                                    "bypass": "Logging, Metrics, AzureServices",
+
+                                    "defaultAction": "deny"
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Network/networkSecurityGroups",
+                            "name": "[variables('networkSecurityGroupName')]",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "apiVersion": "2018-03-01",
+                            "properties": {
+                                "securityRules": [
+                                    {
+                                        "name": "Deny-RDP",
+                                        "properties": {
+                                            "description": "Denies the ability to remote desktop onto Azure batch nodes",
+                                            "protocol": "*",
+                                            "sourcePortRange": "*",
+                                            "destinationPortRange": "3389",
+                                            "sourceAddressPrefix": "*",
+
+
+                                            "destinationAddressPrefix": "*",
+                                            "access": "Deny",
+                                            "priority": "100",
+                                            "direction": "Inbound"
+                                        }
+                                    },
+                                    {
+                                        "name": "Deny-SSH",
+                                        "properties": {
+                                            "description": "Denies the ability to ssh onto Azure batch nodes",
+                                            "protocol": "*",
+                                            "sourcePortRange": "*",
+                                            "destinationPortRange": "22",
+                                            "sourceAddressPrefix": "*",
+
+
+                                            "destinationAddressPrefix": "*",
+                                            "access": "Deny",
+                                            "priority": "101",
+                                            "direction": "Inbound"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Network/privateEndpoints",
+                            "apiVersion": "2020-04-01",
+                            "name": "[variables('storagePrivateLinkName')]",
+                            "dependson": [
+                                "[variables('storageAccountName')]"
+                            ],
+                            "location": "[parameters('azureBatchLocation')]",
+                            "properties": {
+                                "privateLinkServiceConnections": [
+                                    {
+                                        "name": "[variables('storagePrivateLinkName')]",
+                                        "properties": {
+                                            "privateLinkServiceId": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Storage/storageAccounts/',variables('storageAccountName'))]",
+
+                                            "groupIds": [
+                                                "blob"
+                                            ]
+
+                                        }
+                                    }
+                                ],
+                                "manualPrivateLinkServiceConnections": [],
+                                "subnet": {
+                                    "id": "[parameters('azureBatchSubnetResourceID')]"
+                                },
+                                "customDnsConfigs": []
+                            }
+                        },
+
+                        {
+                            "name": "[variables('keyVaultName')]",
+                            "type": "Microsoft.KeyVault/vaults",
+                            "comments": "This creates the keyvault with the firewall turned on, Also adds the accesspolicies for the service principal ",
+                            "apiVersion": "2019-09-01",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "tags": {
+                            },
+                            "properties": {
+                                "tenantId": "[subscription().tenantId]",
+                                "sku": {
+                                    "family": "A",
+                                    "name": "standard"
+                                },
+                                "accessPolicies": [
+
+                                    {
+                                        "tenantId": "[subscription().tenantId]",
+                                        "objectid": "[parameters('azureBatchBuiltInServicePrincipalID')]",
+                                        "metadata": {
+                                            "value": "Azure Batch Service Principal"
+                                        },
+                                        "permissions": {
+                                            "keys": [
+                                            ],
+                                            "secrets": [
+                                                "get",
+                                                "list",
+                                                "set",
+                                                "delete",
+                                                "backup",
+                                                "restore",
+                                                "recover",
+                                                "purge"
+                                            ],
+                                            "certificates": [
+                                            ],
+                                            "storage": [
+                                            ]
+                                        }
+                                    }
+                                    
+                                ],
+
+                                "enabledForDeployment": true,
+                                "enabledForDiskEncryption": true,
+                                "enabledForTemplateDeployment": true,
+                                "enableSoftDelete": false,
+                                "enableRbacAuthorization": false,
+                                "networkAcls": {
+                                    "bypass": "AzureServices",
+                                    "defaultAction": "Deny",
+                                    
+
+
+                                    "virtualNetworkRules": [
+                                        {
+                                            "id": "[parameters('azureBatchSubnetResourceID')]"
+                                        }
+                                    ]
+                                }
+                            },
+                            "resources": [
+                            ]
+                        },
+
+                        {
+                            "name": "[parameters('azureBatchAccountName')]",
+                            "type": "Microsoft.Batch/batchAccounts",
+                            "dependson": [
+                                "[variables('keyVaultName')]",
+                                "[variables('storageAccountName')]"
+
+                            ],
+                            "apiVersion": "2020-03-01",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "tags": {
+                            },
+                            "properties": {
+                                "autoStorage": {
+                                    "storageAccountId": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Storage/storageAccounts/',variables('storageAccountName'))]"
+
+                                },
+                                "poolAllocationMode": "Usersubscription",
+                                "publicNetworkAccess": "Disabled",
+                                "keyVaultReference": {
+                                    "id": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.KeyVault/vaults/',variables('keyVaultName'))]",
+                                    "url": "[concat('https://',variables('keyVaultName'),'.vault.azure.net/')]"
+                                }
+                            },
+                            "resources": [
+                            ]
+                        },
+
+                        {
+                            "type": "Microsoft.Network/privateEndpoints",
+                            "apiVersion": "2020-04-01",
+                            "name": "[variables('privateLinkName')]",
+                            "dependson": [
+                                "[parameters('azureBatchAccountName')]"
+                            ],
+                            "location": "[parameters('azureBatchLocation')]",
+                            "properties": {
+                                "privateLinkServiceConnections": [
+                                    {
+                                        "name": "[concat(parameters('azureBatchAccountName'),'-pl')]",
+                                        "properties": {
+                                            "privateLinkServiceId": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Batch/batchAccounts/',parameters('azureBatchAccountName'))]",
+
+                                            "groupIds": [
+                                                "batchAccount"
+                                            ]
+
+                                        }
+                                    }
+                                ],
+                                "manualPrivateLinkServiceConnections": [],
+                                "subnet": {
+                                    "id": "[parameters('azureBatchSubnetResourceID')]"
+                                },
+                                "customDnsConfigs": []
+                            }
+                        }
+
+
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "dnsZoneandArecord",
+            "condition": "[parameters('deployPrivateDNSZone')]",
+            "dependsOn": [
+                "[guid(subscription().subscriptionId)]",
+                "storageKeyVaultBatchDeployment"
+            ],
+
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "parameters": {
+                    "azureBatchAccountName": {
+                        "value": "[parameters('azureBatchAccountName')]"
+                    },
+                    "azureBatchLocation": {
+                        "value": "[parameters('azureBatchLocation')]"
+                    },
+                    "azureBatchResourceGroupName": {
+                        "value": "[parameters('azureBatchResourceGroupName')]"
+                    },
+                    "azureBatchSubnetResourceID": {
+                        "value": "[parameters('azureBatchSubnetResourceID')]"
+                    }
+
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "azureBatchAccountName": {
+                            "type": "string"
+                        },
+                        "azureBatchLocation": {
+                            "type": "string"
+                        },
+                        "azureBatchResourceGroupName": {
+                            "type": "string"
+                        },
+                        "azureBatchSubnetResourceID": {
+                            "type": "string"
+                        }
+
+
+
+                    },
+                    "variables": {
+                        "privateLinkName": "[concat(parameters('azureBatchAccountName'),'-pl')]",
+                        "privateDnsZoneName": "[concat('privatelink.',parameters('azureBatchLocation'),'.batch.azure.com')]",
+                        "privateLinkResourceID": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Network/privateEndpoints/',variables('privateLinkName'))]",
+                        "azureBatchVnetResourceID": "[ substring(parameters('azureBatchSubnetResourceID'), 0,  lastIndexOf(parameters('azureBatchSubnetResourceID'), '/subnets') )   ]",
+                        "storagePrivateLinkResourceID": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Network/privateEndpoints/',variables('storagePrivateLinkName'))]",
+                        "storagePrivateLinkName": "[concat(parameters('azureBatchAccountName'),'-storage-pl')]",
+                        "storagePrivateDnsZoneName": "[concat('privatelink.blob.core.windows.net')]",
+                        "storageAccountName": "[concat(parameters('azureBatchAccountName'),'sa' )]"
+
+                    },
+                    "resources": [
+
+                        {
+                            "name": "[variables('privateDnsZoneName')]",
+                            "dependson": [
+                            ],
+                            "type": "Microsoft.Network/privateDnsZones",
+                            "apiVersion": "2018-09-01",
+                            "tags": {},
+                            "location": "global",
+                            "properties": {},
+                            "resources": []
+                        },
+
+                        {
+                            "name": "[concat(variables('privateDnsZoneName'),'/',parameters('azureBatchAccountName') )]",
+                            "type": "Microsoft.Network/privateDnsZones/A",
+                            "dependson": [
+                                "[variables('privateDnsZoneName')]"
+                            ],
+
+                            "apiVersion": "2018-09-01",
+                            "properties": {
+                                "metadata": {},
+                                "ttl": "3600",
+                                "aRecords": [
+                                    {
+                                        "ipv4Address": "[reference(variables('privateLinkResourceID'),'2020-04-01').customDnsConfigs[0].ipAddresses[0]]"
+                                    }
+                                ]
+
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('privateDnsZoneName'),'/',last(split(parameters('azureBatchSubnetResourceID'),'/'))  )]",
+                            "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+                            "dependson": [
+                                "[variables('privateDnsZoneName')]"
+                            ],
+
+                            "apiVersion": "2018-09-01",
+                            "tags": {},
+                            "location": "global",
+                            "properties": {
+                                "virtualNetwork": {
+
+                                    "id": "[variables('azureBatchVnetResourceID')]"
+                                },
+                                "registrationEnabled": false
+                            }
+                        },
+
+                        {
+                            "name": "[variables('storagePrivateDnsZoneName')]",
+                            "dependson": [
+                            ],
+                            "type": "Microsoft.Network/privateDnsZones",
+                            "apiVersion": "2018-09-01",
+                            "tags": {},
+                            "location": "global",
+                            "properties": {},
+                            "resources": []
+                        },
+
+                        {
+                            "name": "[concat(variables('storagePrivateDnsZoneName'),'/',variables('storageAccountName') )]",
+                            "type": "Microsoft.Network/privateDnsZones/A",
+                            "dependson": [
+                                "[variables('storagePrivateDnsZoneName')]"
+                            ],
+
+                            "apiVersion": "2018-09-01",
+                            "properties": {
+                                "metadata": {},
+                                "ttl": "3600",
+                                "aRecords": [
+                                    {
+                                        "ipv4Address": "[reference(variables('storagePrivateLinkResourceID'),'2020-04-01').customDnsConfigs[0].ipAddresses[0]]"
+                                    }
+                                ]
+
+                            }
+                        },
+                        {
+                            "name": "[concat(variables('storagePrivateDnsZoneName'),'/',last(split(parameters('azureBatchSubnetResourceID'),'/'))  )]",
+                            "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+                            "dependson": [
+                                "[variables('privateDnsZoneName')]"
+                            ],
+
+                            "apiVersion": "2018-09-01",
+                            "tags": {},
+                            "location": "global",
+                            "properties": {
+                                "virtualNetwork": {
+
+                                    "id": "[variables('azureBatchVnetResourceID')]"
+                                },
+                                "registrationEnabled": false
+                            }
+                        }
+
+
+
+
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('setNSGtoSubnet')]",
+            "dependsOn": [
+                "storageKeyVaultBatchDeployment"
+            ],
+            "resourceGroup": "[split(parameters('azureBatchSubnetResourceID'),'/')[4]]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "apiVersion": "2018-03-01",
+                            "type": "Microsoft.Network/virtualNetworks/subnets",
+                            "name": "[concat(variables('virtualNetworkName'), '/', variables('virtualNetworkSubnetName'))]",
+                            "location": "[parameters('azureBatchLocation')]",
+                            "properties": {
+                                "addressPrefix": "[reference(  parameters('azureBatchSubnetResourceID'), '2018-03-01').addressPrefix]",
+                                "serviceEndpoints": [
+                                    {
+                                        "service": "Microsoft.KeyVault",
+                                        "locations": [
+                                            "*"
+                                        ]
+                                    },
+                                    {
+                                        "service": "Microsoft.Storage",
+                                        "locations": [
+                                            "westcentralus",
+                                            "westus2"
+                                        ]
+                                    }
+                                ],
+                                "routeTable": {
+                                    "id": "[reference(  parameters('azureBatchSubnetResourceID'), '2018-03-01').routeTable.id]"
+                                },
+                                "privateEndpointNetworkPolicies": "Disabled",
+                                "privateLinkServiceNetworkPolicies": "Disabled",
+                                "networkSecurityGroup": {
+                                    "id": "[concat(subscription().id , '/resourceGroups/' , parameters('azureBatchResourceGroupName') ,'/providers/Microsoft.Network/networkSecurityGroups/',variables('networkSecurityGroupName'))]"
+
+                                }
+                            }
+                        }
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('batchPoolDeploymentNew',copyindex())]",
+            "dependsOn": [
+                "storageKeyVaultBatchDeployment"
+            ],
+            "copy": {
+                "count": "[length(parameters('azureBatchPoolsObject').pools)]",
+                "name": "batchPoolDeployment"
+            },
+            "resourceGroup": "[parameters('azureBatchResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                    },
+                    "variables": {
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('azureBatchAccountName'),'/', parameters('azureBatchPoolsObject').pools[copyindex()].name)]",
+                            "type": "Microsoft.Batch/batchAccounts/pools",
+                            "comments": "Adds the batch account pool based on the parameter object azureBatchPoolsObject",
+                            "apiVersion": "2020-03-01",
+                            "properties": {
+                                "networkConfiguration": {
+                                    "subnetId": "[parameters('azureBatchSubnetResourceID')]",
+
+                                    "publicIPAddressConfiguration": {
+                                        "provision": "NoPublicIPAddresses"
+                                    }
+
+
+                                },
+                                "deploymentConfiguration": "[parameters('azureBatchPoolsObject').pools[copyindex()].deploymentConfiguration]",
+                                "vmSize": "[parameters('azureBatchPoolsObject').pools[copyindex()].vmSize]"
+
+                            }
+                        }
+
+                    ],
+                    "outputs": {
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+    }
+}
