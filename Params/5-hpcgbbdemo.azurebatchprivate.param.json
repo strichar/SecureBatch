@@ -9,7 +9,7 @@
             "value": "eastus"
         },
         "azureBatchResourceGroupName": {
-            "value": "azurebatch-demo-eastus"
+            "value": "azurebatch-demo2"
         },
         "azureBatchSubnetResourceID": {
             "value": "/subscriptions/71363c9e-d080-4b1d-8594-f60644a00e4a/resourceGroups/spoke-network-1001/providers/Microsoft.Network/virtualNetworks/prod-hub-1001-spoke-1001/subnets/prod-hub-1001-spoke-1001-app2"
@@ -35,12 +35,17 @@
                                     ],
                                     "containerRegistries": [
                                         {
-                                            "registryServer": "xx.azurecr.io",
+                                            "registryServer": "hpcgbbemeahack.azurecr.io",
                                             "username": "xx",
-                                            "password": "xxx"
+                                            "password": "xx"
                                         }
                                     ]
                                 }
+                            }
+                        },
+                        "scaleSettings": {
+                            "fixedScale": {
+                                "targetDedicatedNodes": 3
                             }
                         },
                         "vmSize": "STANDARD_D1_V2",
@@ -60,9 +65,12 @@
                                 "nodeAgentSkuId": "batch.node.ubuntu 18.04"
                             }
                         },
-                        "vmSize": "STANDARD_D1_V2",
-                        "targetDedicatedNodes": 1,
-                        "targetLowPriorityNodes": 0
+                        "scaleSettings": {
+                            "fixedScale": {
+                                "targetDedicatedNodes": 3
+                            }
+                        },
+                        "vmSize": "STANDARD_D1_V2"
                     },
                     {
                         "name": "batchc",
@@ -77,9 +85,12 @@
                                 "nodeAgentSkuId": "batch.node.windows amd64"
                             }
                         },
-                        "vmSize": "STANDARD_D1_V2",
-                        "targetDedicatedNodes": 1,
-                        "targetLowPriorityNodes": 0
+                        "scaleSettings": {
+                            "fixedScale": {
+                                "targetDedicatedNodes": 3
+                            }
+                        },
+                        "vmSize": "STANDARD_D1_V2"
                     }
                 ]
             }

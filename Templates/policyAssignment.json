@@ -1,0 +1,51 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "type": "string"
+        },
+        "policyDefinitionId": {
+            "type": "string"
+        },
+        "policyLocation": {
+            "type": "string"
+        },
+        "policyScope": {
+            "type": "string"
+        },
+        "policyNotScopes": {
+            "type": "array"
+        },
+        "policyParameters": {
+            "type": "object"
+        }
+
+    },
+    "variables": {
+
+    },
+    "resources": [
+        {
+            "name": "[parameters('policyName')]",
+            "type": "Microsoft.Authorization/policyAssignments",
+            "apiVersion": "2019-06-01",
+            "properties": {
+                "displayName": "[parameters('policyName')]",
+                "policyDefinitionId": "[parameters('policyDefinitionId')]",
+                "scope": "[parameters('policyScope')]",
+                "notScopes": "[parameters('policyNotScopes')]",
+                "parameters": "[parameters('policyParameters')]",
+
+                "enforcementMode": "Default"
+            },
+            "location": "[parameters('policyLocation')]",
+            "identity": {
+                "type": "SystemAssigned"
+            }
+
+        }
+    ],
+    "outputs": {
+    }
+}

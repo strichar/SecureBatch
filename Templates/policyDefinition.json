@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "policyName": {
+            "type": "string"
+        },
+        "policyRule": {
+            "type": "object"
+        },
+        "policyParameters": {
+            "type": "object"
+        }
+
+    },
+    "variables": {
+
+    },
+    "resources": [
+        {
+            "name": "[parameters('policyName')]",
+            "type": "Microsoft.Authorization/policyDefinitions",
+            "apiVersion": "2019-06-01",
+            "properties": {
+                "policyType": "custom",
+                "mode": "All",
+                "displayName": "[parameters('policyName')]",
+                "description": "[parameters('policyName')]",
+                "policyRule": "[parameters('policyRule')]",
+                "parameters": "[parameters('policyParameters')]"
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

@@ -606,6 +606,7 @@
 
                                 },
                                 "deploymentConfiguration": "[parameters('azureBatchPoolsObject').pools[copyindex()].deploymentConfiguration]",
+                                "scaleSettings": "[parameters('azureBatchPoolsObject').pools[copyindex()].scaleSettings]",
                                 "vmSize": "[parameters('azureBatchPoolsObject').pools[copyindex()].vmSize]"
 
                             }
